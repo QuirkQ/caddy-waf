@@ -1,0 +1,76 @@
+name: Scheduled Build
+
+on:
+  schedule:
+    - cron: "0 2 * * 0,3" # Sundays and Wednesdays at 2 AM UTC
+  workflow_dispatch:
+
+concurrency:
+  group: scheduled-build
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    name: Detect new versions
+    runs-on: ubuntu-24.04
+    outputs:
+      has_new: ${{ steps.check.outputs.has_new }}
+      caddy_version: ${{ steps.check.outputs.caddy_version }}
+      tags: ${{ steps.check.outputs.tags }}
+    permissions:
+      packages: read
+
+    steps:
+      - name: Check for new Caddy version
+        id: check
+        env:
+          IMAGE_NAME: ${{ github.repository }}
+        run: |
+          IMAGE_NAME="${IMAGE_NAME,,}"
+          VERSION=$(curl -s https://api.github.com/repos/caddyserver/caddy/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+          echo "Latest Caddy: $VERSION"
+
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f1-2)
+
+          # Check if this Caddy version already exists in ghcr.io
+          # NOTE: this only detects new Caddy releases — new coraza-caddy or CRS
+          # releases don't trigger a rebuild here. Run workflow_dispatch on
+          # build.yml to force a rebuild when those change.
+          HAS_NEW="true"
+          TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:${IMAGE_NAME}:pull" | jq -r '.token // empty')
+
+          if [ -n "$TOKEN" ]; then
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "Authorization: Bearer $TOKEN" \
+              "https://ghcr.io/v2/${IMAGE_NAME}/manifests/${VERSION}")
+
+            if [ "$STATUS" = "200" ]; then
+              HAS_NEW="false"
+              echo "Version $VERSION already exists, skipping"
+            fi
+          fi
+
+          echo "has_new=$HAS_NEW"            >> "$GITHUB_OUTPUT"
+          echo "caddy_version=$VERSION"      >> "$GITHUB_OUTPUT"
+
+          TAGS="ghcr.io/${IMAGE_NAME}:${VERSION}
+          ghcr.io/${IMAGE_NAME}:${MINOR}
+          ghcr.io/${IMAGE_NAME}:${MAJOR}
+          ghcr.io/${IMAGE_NAME}:latest"
+
+          echo "tags<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$TAGS"      >> "$GITHUB_OUTPUT"
+          echo "EOF"        >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: detect
+    if: needs.detect.outputs.has_new == 'true'
+    uses: ./.github/workflows/build-image.yml
+    with:
+      caddy_version: ${{ needs.detect.outputs.caddy_version }}
+      tags: ${{ needs.detect.outputs.tags }}
+    permissions:
+      contents: read
+      packages: write

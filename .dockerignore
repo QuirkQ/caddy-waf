@@ -1,0 +1,9 @@
+.git
+.github
+.gitignore
+.claude
+*.md
+example
+certs
+data
+config

@@ -1,0 +1,75 @@
+name: Build and Publish
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      caddy_version:
+        description: "Caddy version to build (e.g. 2.10.0)"
+        required: false
+        default: ""
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-24.04
+    outputs:
+      caddy_version: ${{ steps.version.outputs.caddy_version }}
+      tags: ${{ steps.tags.outputs.tags }}
+
+    steps:
+      - name: Determine Caddy version
+        id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.caddy_version }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "caddy_version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            VERSION=$(curl -s https://api.github.com/repos/caddyserver/caddy/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+            echo "caddy_version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute tags
+        id: tags
+        env:
+          REGISTRY: ghcr.io
+          IMAGE_NAME: ${{ github.repository }}
+          CADDY_VERSION: ${{ steps.version.outputs.caddy_version }}
+          GIT_REF: ${{ github.ref }}
+        run: |
+          IMAGE_NAME="${IMAGE_NAME,,}"
+          MAJOR=$(echo "$CADDY_VERSION" | cut -d. -f1)
+          MINOR=$(echo "$CADDY_VERSION" | cut -d. -f1-2)
+
+          TAGS="${REGISTRY}/${IMAGE_NAME}:${CADDY_VERSION}"
+          TAGS="${TAGS}
+          ${REGISTRY}/${IMAGE_NAME}:${MINOR}"
+          TAGS="${TAGS}
+          ${REGISTRY}/${IMAGE_NAME}:${MAJOR}"
+
+          if [ "$GIT_REF" = "refs/heads/main" ]; then
+            TAGS="${TAGS}
+          ${REGISTRY}/${IMAGE_NAME}:latest"
+          fi
+
+          echo "tags<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$TAGS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: prepare
+    uses: ./.github/workflows/build-image.yml
+    with:
+      caddy_version: ${{ needs.prepare.outputs.caddy_version }}
+      tags: ${{ needs.prepare.outputs.tags }}
+    permissions:
+      contents: read
+      packages: write

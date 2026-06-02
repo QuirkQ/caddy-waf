@@ -1,0 +1,12 @@
+test.internal {
+    hosts {
+        172.20.0.10 app.test.internal
+        fallthrough
+    }
+    log
+}
+
+. {
+    forward . 8.8.8.8 8.8.4.4
+    log
+}

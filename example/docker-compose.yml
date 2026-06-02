@@ -1,0 +1,75 @@
+# Integration test for caddy-waf.
+#
+# Simulates a self-hosted edge with TLS termination and WAF blocking:
+#   test client → DNS → caddy-waf (TLS via internal CA + WAF) → nginx backend
+#
+# Two networks:
+#   public  172.20.0.0/24 — DNS, caddy, test client (the "internet" side)
+#   backend 172.20.2.0/24 — caddy ↔ app (the "LAN" side)
+#
+# Usage:
+#   ./run.sh             — build, run, test
+#   ./run.sh --no-build  — skip build (use existing caddy-waf:test)
+
+x-dns: &dns
+  dns: [172.20.0.2]
+
+services:
+  # ── DNS ────────────────────────────────────────────────────────────
+  dns:
+    image: coredns/coredns:latest
+    command: ["-conf", "/etc/coredns/Corefile"]
+    volumes:
+      - ./dns/Corefile:/etc/coredns/Corefile:ro
+    networks:
+      public:
+        ipv4_address: 172.20.0.2
+
+  # ── caddy-waf ──────────────────────────────────────────────────────
+  caddy:
+    image: ${CADDY_WAF_IMAGE:-caddy-waf:test}
+    build:
+      context: ..
+    environment:
+      CADDY_DOMAIN: app.test.internal
+      CADDY_UPSTREAM: http://app:80
+      TLS_INTERNAL: "true"
+      WAF_MODE: "On"
+      WAF_PARANOIA: "1"
+      LOG_LEVEL: INFO
+    networks:
+      public:
+        ipv4_address: 172.20.0.10
+      backend:
+        ipv4_address: 172.20.2.10
+
+  # ── Backend ────────────────────────────────────────────────────────
+  app:
+    image: nginx:alpine
+    networks:
+      backend:
+        ipv4_address: 172.20.2.20
+
+  # ── Integration test runner ────────────────────────────────────────
+  test:
+    image: alpine:3.21
+    <<: *dns
+    depends_on:
+      caddy:
+        condition: service_healthy
+    entrypoint: ["sh", "/test.sh"]
+    volumes:
+      - ./test.sh:/test.sh:ro
+    networks:
+      public:
+        ipv4_address: 172.20.0.100
+
+networks:
+  public:
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+  backend:
+    ipam:
+      config:
+        - subnet: 172.20.2.0/24

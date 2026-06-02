@@ -17,10 +17,19 @@ ENV GOTOOLCHAIN=auto
 # xcaddy compiles Caddy + the Coraza WAF module. The positional version arg
 # pins Caddy; coraza-caddy "latest" omits the @version suffix so the newest
 # tag wins.
+# Transitive-dep overrides: pin indirect deps to the latest tag on their
+# current major so Go MVS picks them over older versions pulled in by
+# Caddy/Coraza. These auto-resolve at build time and become no-ops once
+# upstream catches up.
+#   go-jose/v3 @latest — addresses CVE-2026-34986 (HIGH, DoS via crafted JWE)
 RUN if [ "$CORAZA_CADDY_VERSION" = "latest" ]; then \
-      xcaddy build "v${CADDY_VERSION}" --with github.com/corazawaf/coraza-caddy/v2 ; \
+      xcaddy build "v${CADDY_VERSION}" \
+        --with github.com/corazawaf/coraza-caddy/v2 \
+        --with github.com/go-jose/go-jose/v3@latest ; \
     else \
-      xcaddy build "v${CADDY_VERSION}" --with "github.com/corazawaf/coraza-caddy/v2@${CORAZA_CADDY_VERSION}" ; \
+      xcaddy build "v${CADDY_VERSION}" \
+        --with "github.com/corazawaf/coraza-caddy/v2@${CORAZA_CADDY_VERSION}" \
+        --with github.com/go-jose/go-jose/v3@latest ; \
     fi
 
 FROM alpine:${ALPINE_VERSION}

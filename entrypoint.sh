@@ -21,7 +21,7 @@ setup_user() {
     sed -i "s/^caddy:\([^:]*\):${CUR_UID}:/caddy:\1:${PUID}:/" /etc/passwd
   fi
 
-  chown -R caddy:caddy /etc/caddy /data /config
+  chown -R caddy:caddy /etc/caddy /data /config 2>/dev/null || true
 }
 
 if [ "$(id -u)" = "0" ]; then

@@ -52,7 +52,7 @@ services:
 
   # ── Integration test runner ────────────────────────────────────────
   test:
-    image: alpine:3.21
+    image: alpine:3.24
     <<: *dns
     depends_on:
       caddy:

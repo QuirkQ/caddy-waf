@@ -1,7 +1,7 @@
-ARG CADDY_VERSION=2.11.2
+ARG CADDY_VERSION=2.11.4
 ARG CORAZA_CADDY_VERSION=latest
-ARG CRS_VERSION=4.18.0
-ARG ALPINE_VERSION=3.21
+ARG CRS_VERSION=4.28.0
+ARG ALPINE_VERSION=3.24
 
 # Use the latest builder image regardless of target Caddy version — xcaddy can
 # build any Caddy version, and the builder gets us Go + xcaddy.
@@ -17,19 +17,14 @@ ENV GOTOOLCHAIN=auto
 # xcaddy compiles Caddy + the Coraza WAF module. The positional version arg
 # pins Caddy; coraza-caddy "latest" omits the @version suffix so the newest
 # tag wins.
-# Transitive-dep overrides: pin indirect deps to the latest tag on their
-# current major so Go MVS picks them over older versions pulled in by
-# Caddy/Coraza. These auto-resolve at build time and become no-ops once
-# upstream catches up.
-#   go-jose/v3 @latest — addresses CVE-2026-34986 (HIGH, DoS via crafted JWE)
+# No transitive-dep overrides needed: Caddy 2.11.4 already requires
+# go-jose/v3 v3.0.5 and v4 v4.1.4, both of which carry the CVE-2026-34986 fix.
 RUN if [ "$CORAZA_CADDY_VERSION" = "latest" ]; then \
       xcaddy build "v${CADDY_VERSION}" \
-        --with github.com/corazawaf/coraza-caddy/v2 \
-        --with github.com/go-jose/go-jose/v3@latest ; \
+        --with github.com/corazawaf/coraza-caddy/v2 ; \
     else \
       xcaddy build "v${CADDY_VERSION}" \
-        --with "github.com/corazawaf/coraza-caddy/v2@${CORAZA_CADDY_VERSION}" \
-        --with github.com/go-jose/go-jose/v3@latest ; \
+        --with "github.com/corazawaf/coraza-caddy/v2@${CORAZA_CADDY_VERSION}" ; \
     fi
 
 FROM alpine:${ALPINE_VERSION}

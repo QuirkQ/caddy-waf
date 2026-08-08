@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       caddy_version:
-        description: "Caddy version to build (e.g. 2.10.0)"
+        description: "Caddy version to build (e.g. 2.11.4)"
         required: false
         default: ""
 

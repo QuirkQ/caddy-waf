@@ -245,8 +245,8 @@ These tests run in CI on every push — the image is only published if they all 
 |---|---|
 | `latest` | Latest stable Caddy release with the newest coraza-caddy and CRS |
 | `2` | Latest 2.x |
-| `2.10` | Latest 2.10.x |
-| `2.10.0` | Specific Caddy version |
+| `2.11` | Latest 2.11.x |
+| `2.11.4` | Specific Caddy version |
 
 Each tag pins Caddy; the coraza-caddy module and OWASP CRS version are detected and stamped into the image labels at build time.
 
